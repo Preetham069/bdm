@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badminton Coaching Tracker</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 15px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 12px 20px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2980b9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background-color: #f8f9fa; font-size: 0.9em; color: #7f8c8d; }
+        .summary { margin-top: 25px; padding: 15px; background: #2ecc71; color: white; border-radius: 8px; text-align: center; font-size: 1.2em; font-weight: bold; }
+        #loading { text-align: center; color: #3498db; font-weight: bold; }
+        input[type="number"] { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Badminton Tracker</h2>
+    
+    <div class="input-group">
+        <input type="text" id="studentName" placeholder="New Student Name">
+        <button onclick="addStudent()">Add</button>
+    </div>
+
+    <div id="loading">Syncing with Google Sheets...</div>
+
+    <table id="attendanceTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Attnd.</th>
+                <th>Fee</th>
+                <th>Grip</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <div class="summary">
+        Total Revenue: ₹<span id="totalRevenue">0</span>
+    </div>
+</div>
+
+<script>
+    // PASTE YOUR GOOGLE WEB APP URL BELOW
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKDDickkebfEpPeEYSanwFdJVyMVVkN_-GBUjnjiZux09wjCuJ1va9gy8GWRyaPSuI/exec";
+
+    async function loadData() {
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
+            const body = document.getElementById('tableBody');
+            body.innerHTML = "";
+            let total = 0;
+
+            // Loop starts from 1 to skip the header row in Sheets
+            for (let i = 1; i < data.length; i++) {
+                const name = data[i][0];
+                const attendance = data[i][1];
+                const monthly = Number(data[i][2]);
+                const grip = Number(data[i][3]);
+                
+                total += (monthly + grip);
+
+                body.innerHTML += `
+                    <tr>
+                        <td><strong>${name}</strong></td>
+                        <td><input type="checkbox" ${attendance == 1 ? 'checked' : ''} onchange="update('${name}', 2, this.checked ? 1 : 0)"></td>
+                        <td><input type="number" value="${monthly}" onchange="update('${name}', 3, this.value)"></td>
+                        <td><input type="number" value="${grip}" onchange="update('${name}', 4, this.value)"></td>
+                    </tr>
+                `;
+            }
+
+            document.getElementById('totalRevenue').innerText = total;
+            document.getElementById('loading').style.display = "none";
+            document.getElementById('attendanceTable').style.display = "table";
+        } catch (error) {
+            console.error("Error loading data:", error);
+        }
+    }
+
+    async function addStudent() {
+        const nameInput = document.getElementById('studentName');
+        const name = nameInput.value;
+        if (!name) return;
+
+        document.getElementById('loading').style.display = "block";
+        await fetch(SCRIPT_URL, {
+            method: "POST",
+            mode: 'no-cors',
+            body: JSON.stringify({ action: "add", name: name })
+        });
+        
+        nameInput.value = "";
+        // Refresh after 1 second to give Google time to update
+        setTimeout(loadData, 1500);
+    }
+
+    async function update(name, col, val) {
+        await fetch(SCRIPT_URL, {
+            method: "POST",
+            mode: 'no-cors',
+            body: JSON.stringify({ action: "update", name: name, col: col, val: val })
+        });
+        // We calculate total locally for speed
+        calculateTotal();
+    }
+
+    function calculateTotal() {
+        let total = 0;
+        const rows = document.querySelectorAll('#tableBody tr');
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('input[type="number"]');
+            total += (Number(inputs[0].value) + Number(inputs[1].value));
+        });
+        document.getElementById('totalRevenue').innerText = total;
+    }
+
+    loadData();
+</script>
+
+</body>
+</html>
